@@ -40,7 +40,7 @@ pub trait DeviceInfo: DeviceId {
         }
     }
 
-    fn device_is_use(&self) -> Result<bool> {
+    fn device_in_use(&self) -> Result<bool> {
         unsafe {
             let mut in_use = mem::MaybeUninit::uninit();
             check_call(dwf::FDwfEnumDeviceIsOpened(
