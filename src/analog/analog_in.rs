@@ -317,6 +317,17 @@ impl<'a> AnalogInChannel<'a> {
         Ok(())
     }
 
+    pub fn set_offset(&self, offset: f64) -> Result<()> {
+        unsafe {
+            check_call(dwf::FDwfAnalogInChannelOffsetSet(
+                self.input.device.get_handle(),
+                self.ix,
+                offset,
+            ))?;
+        }
+        Ok(())
+    }
+
     pub fn set_filter(&self, filter: AnalogFilter) -> Result<()> {
         unsafe {
             let filter = {
