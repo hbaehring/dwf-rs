@@ -166,6 +166,20 @@ impl<'a> AnalogIn<'a> {
         }
     }
 
+    pub fn get_buffer_size_info(&self) -> Result<(i32, i32)> {
+        unsafe {
+            let mut min_size = mem::MaybeUninit::uninit();
+            let mut max_size = mem::MaybeUninit::uninit();
+            check_call(dwf::FDwfAnalogInBufferSizeInfo(
+                self.device.get_handle(),
+                min_size.as_mut_ptr(),
+                max_size.as_mut_ptr(),
+            ))?;
+
+            Ok((min_size.assume_init(), max_size.assume_init()))
+        }
+    }
+
     pub fn set_counter_timeout(&self, timeout: f64) -> Result<()> {
         unsafe {
             check_call(dwf::FDwfAnalogInCounterSet(
