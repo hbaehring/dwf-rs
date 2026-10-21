@@ -42,13 +42,13 @@ pub trait DeviceInfo: DeviceId {
 
     fn device_in_use(&self) -> Result<bool> {
         unsafe {
-            let mut in_use = mem::MaybeUninit::uninit();
+            let mut in_use = mem::MaybeUninit::<dwf::BOOL>::uninit();
             check_call(dwf::FDwfEnumDeviceIsOpened(
                 self.get_device_id(),
-                in_use.as_mut_ptr() as *mut dwf::BOOL,
+                in_use.as_mut_ptr(),
             ))?;
 
-            in_use.assume_init()
+            Ok(dwf::from_c_bool(in_use.assume_init()))
         }
     }
 }
