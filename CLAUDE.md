@@ -8,13 +8,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build prerequisites
 
-`build.rs` runs `bindgen` on `wrapper.h` (`#include <dwf.h>`) and links against the installed SDK, so nothing builds without it:
+`build.rs` runs `bindgen` on `wrapper.h` (`#include <dwf.h>`) and links against the installed SDK. It picks the platform from `CARGO_CFG_TARGET_OS`/`CARGO_CFG_TARGET_ARCH`, not `cfg!`, which reports the host inside a build script:
 
 - **Linux:** headers in `/usr/include/digilent/waveforms`, links `-ldwf`
 - **macOS:** `/Library/Frameworks/dwf.framework` (also sets an rpath)
-- **Windows:** `C:\Program Files (x86)\Digilent\WaveFormsSDK\inc`, links `dwf.dll`
+- **Windows:** headers in `C:\Program Files (x86)\Digilent\WaveFormsSDK\inc`, import library in `...\WaveFormsSDK\lib\{x86,x64,arm64,arm64ec}`
 
-`bindgen` also needs libclang. If the SDK or libclang is missing, the build fails inside `build.rs`, before any crate code is compiled.
+If the SDK headers are missing, `build.rs` falls back to the bundled `includes/dwf.h` and prints a cargo warning. That keeps docs.rs and CI builds working. Linking and running still need the real library. `bindgen` always needs libclang.
+
+The SDK manual is at `docs/WaveForms SDK Reference Manual.pdf`. It's the reference for function semantics, such as whether a count is in samples or bytes.
 
 ## Commands
 
@@ -27,7 +29,7 @@ cargo run --example analog_in_acquire   # requires a connected device
 cargo fmt && cargo clippy
 ```
 
-The tests in `src/lib.rs` call into the installed library, so they need the SDK at runtime. Most examples also need hardware attached. `gnuplot` is a dev-dependency used by `analog_in_acquisition`.
+The tests in `src/lib.rs` call into the installed library, so they need the SDK at runtime. The tests in `tests/` don't need hardware. Each one defines the `FDwf*` functions it uses as `#[no_mangle] extern "C"` functions, which take precedence over libdwf's. Every file is its own binary, so these replacements stay local to that file. Most examples also need hardware attached. `gnuplot` is a dev-dependency used by `analog_in_acquisition`.
 
 ## Architecture
 
