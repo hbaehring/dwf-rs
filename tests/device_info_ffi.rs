@@ -4,16 +4,16 @@ use dwf::device_info::{DeviceId, DeviceInfo};
 use std::ffi::c_int;
 
 #[no_mangle]
-pub extern "C" fn FDwfEnumDeviceIsOpened(idx_device: c_int, pf_is_used: *mut c_int) -> c_int {
-    unsafe { *pf_is_used = (idx_device == 0) as c_int };
+unsafe extern "C" fn FDwfEnumDeviceIsOpened(idx_device: c_int, pf_is_used: *mut c_int) -> c_int {
+    *pf_is_used = (idx_device == 0) as c_int;
     1
 }
 
 struct Index(c_int);
 
 impl DeviceId for Index {
-    fn get_device_id(&self) -> c_int {
-        self.0
+    fn get_device_id(&self) -> dwf::Result<c_int> {
+        Ok(self.0)
     }
 }
 

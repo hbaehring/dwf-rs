@@ -35,6 +35,17 @@ impl<'a> AnalogIn<'a> {
         Ok(())
     }
 
+    pub fn reconfigure(&self) -> Result<()> {
+        unsafe {
+            check_call(dwf::FDwfAnalogInConfigure(
+                self.device.get_handle(),
+                to_c_bool(true),
+                to_c_bool(false),
+            ))?;
+        }
+        Ok(())
+    }
+
     pub fn set_frequency(&self, freq: f64) -> Result<()> {
         unsafe {
             check_call(dwf::FDwfAnalogInFrequencySet(
@@ -45,14 +56,27 @@ impl<'a> AnalogIn<'a> {
         Ok(())
     }
 
-    pub fn set_record_mode(&self) -> Result<()> {
+    pub fn set_acquisition_mode(&self, mode: AcquisitionMode) -> Result<()> {
+        let mode = match mode {
+            AcquisitionMode::Single => dwf::acqmodeSingle,
+            AcquisitionMode::ScanShift => dwf::acqmodeScanShift,
+            AcquisitionMode::ScanScreen => dwf::acqmodeScanScreen,
+            AcquisitionMode::Record => dwf::acqmodeRecord,
+            AcquisitionMode::Overs => dwf::acqmodeOvers,
+            AcquisitionMode::Single1 => dwf::acqmodeSingle1,
+        };
         unsafe {
             check_call(dwf::FDwfAnalogInAcquisitionModeSet(
                 self.device.get_handle(),
-                dwf::acqmodeRecord,
+                mode,
             ))?;
         }
         Ok(())
+    }
+
+    #[deprecated(note = "use set_acquisition_mode(AcquisitionMode::Record)")]
+    pub fn set_record_mode(&self) -> Result<()> {
+        self.set_acquisition_mode(AcquisitionMode::Record)
     }
 
     pub fn set_record_length(&self, length: f64) -> Result<()> {
@@ -246,7 +270,7 @@ impl<'a> AnalogIn<'a> {
     }
 
     // TODO: Rework to check channel index
-    pub fn channel(&self, ix: i32) -> AnalogInChannel {
+    pub fn channel(&self, ix: i32) -> AnalogInChannel<'_> {
         AnalogInChannel {
             input: self,
             ix: ix as c_int,
@@ -300,6 +324,7 @@ pub enum TriggerSlope {
     Either,
 }
 
+#[derive(Clone)]
 pub struct AnalogInChannel<'a> {
     input: &'a AnalogIn<'a>,
     ix: c_int,
@@ -374,6 +399,19 @@ impl<'a> AnalogInChannel<'a> {
     }
 }
 
+#[derive(Eq, PartialEq, Debug)]
+pub enum AcquisitionMode {
+    Single,
+    ScanShift,
+    ScanScreen,
+    Record,
+    /// ADP3000 series: captures are phase-shifted against the other instruments.
+    Overs,
+    /// Single acquisition without rearming the instrument.
+    Single1,
+}
+
+#[derive(Eq, PartialEq, Debug)]
 pub enum AnalogFilter {
     Decimate,
     Average,

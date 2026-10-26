@@ -1,11 +1,13 @@
+use crate::device_info::EnumFilter;
 use crate::dwf::DwfError;
 use crate::Error::FailToGetErrorMessage;
-use std::ffi::CStr;
+use std::ffi::{c_char, CStr};
 use std::mem;
 
 pub mod analog;
 pub mod device;
 pub mod device_info;
+pub mod digital;
 pub mod dwf;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -16,14 +18,20 @@ pub enum Error {
     FailToGetErrorCode,
     FailToGetErrorMessage,
     FailWithErrorCode(DwfError),
+    /// `Device::open(-1, ..)` found no enumerated device that is not in use.
+    NoDeviceAvailable,
+    /// The device was opened without an enumeration index (`Device::open_ex`).
+    UnknownDeviceIndex,
+    /// A string argument contains a NUL byte and can't be passed to C.
+    InvalidString,
 }
 
 impl Error {
     pub fn get_error_message(&self) -> Result<String> {
         unsafe {
-            let mut error_message = [0i8; 512];
+            let mut error_message = [0 as c_char; 512];
             if dwf::from_c_bool(dwf::FDwfGetLastErrorMsg(error_message.as_mut_ptr())) {
-                Ok(CStr::from_ptr(mem::transmute(error_message.as_mut_ptr()))
+                Ok(CStr::from_ptr(error_message.as_ptr())
                     .to_str()
                     .unwrap()
                     .to_owned())
@@ -62,14 +70,28 @@ fn get_error_code() -> Error {
 }
 
 pub fn get_version() -> Result<String> {
-    let mut version = [0i8; 32];
+    let mut version = [0 as c_char; 32];
     unsafe {
         check_call(dwf::FDwfGetVersion(version.as_mut_ptr()))?;
 
-        Ok(CStr::from_ptr(mem::transmute(version.as_mut_ptr()))
+        Ok(CStr::from_ptr(version.as_ptr())
             .to_str()
             .unwrap()
             .to_owned())
+    }
+}
+
+pub fn enumerate_devices(filter: EnumFilter) -> Result<i32> {
+    let filter = match filter {
+        EnumFilter::All => dwf::enumfilterAll,
+        EnumFilter::Device(device_type) => device_type.to_devid(),
+        EnumFilter::Types(types) => types.to_enumfilter(),
+    };
+    let mut num_devices = mem::MaybeUninit::uninit();
+    unsafe {
+        check_call(dwf::FDwfEnum(filter, num_devices.as_mut_ptr()))?;
+        let num_devices = num_devices.assume_init();
+        Ok(num_devices)
     }
 }
 

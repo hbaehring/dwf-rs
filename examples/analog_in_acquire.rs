@@ -1,5 +1,5 @@
 use dwf;
-use dwf::analog::analog_in::AnalogAcquisitionStatus;
+use dwf::analog::analog_in::{AcquisitionMode, AnalogAcquisitionStatus};
 use dwf::device_info::DeviceInfo;
 
 const FREQ: f64 = 10f64;
@@ -13,14 +13,16 @@ fn main() {
 
     println!("Device name: {}", device.get_device_name().unwrap());
     println!("Device serial: {}", device.get_device_serial().unwrap());
-    println!("Device in use: {}", device.device_is_use().unwrap());
+    println!("Device in use: {}", device.device_in_use().unwrap());
 
     let analog_in = device.analog_in();
     let analog_channel0 = analog_in.channel(0);
 
     analog_channel0.enable().unwrap();
     analog_channel0.set_range(RANGE).unwrap();
-    analog_in.set_record_mode().unwrap();
+    analog_in
+        .set_acquisition_mode(AcquisitionMode::Record)
+        .unwrap();
     analog_in.set_frequency(FREQ).unwrap();
     analog_in
         .set_record_length((NUM_SAMPLES / FREQ as usize) as f64)
