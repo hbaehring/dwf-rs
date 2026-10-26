@@ -10,6 +10,7 @@ readme = "README.md"
 license = "Apache-2.0"
 repository = "https://github.com/no111u3/dwf-rs"
 edition = "2021"
+exclude = ["docs/"]
 
 [dependencies]
 
