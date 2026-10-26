@@ -29,14 +29,14 @@ cargo run --example analog_in_acquire   # requires a connected device
 cargo fmt && cargo clippy
 ```
 
-The tests in `src/lib.rs` call into the installed library, so they need the SDK at runtime. The tests in `tests/` don't need hardware. Each one defines the `FDwf*` functions it uses as `#[no_mangle] extern "C"` functions, which take precedence over libdwf's. Every file is its own binary, so these replacements stay local to that file. Most examples also need hardware attached. `gnuplot` is a dev-dependency used by `analog_in_acquisition`.
+The tests in `src/lib.rs` call into the installed library, so they need the SDK at runtime. The tests in `tests/` don't need hardware. Each one defines the `FDwf*` functions it uses as private `#[no_mangle] unsafe extern "C"` functions, which take precedence over libdwf's. Keep them private and `unsafe`: clippy rejects public functions that dereference raw pointers. Every file is its own binary, so these replacements stay local to that file. Most examples also need hardware attached. `gnuplot` is a dev-dependency used by `analog_in_acquisition`.
 
 ## Architecture
 
 - **`src/dwf.rs`**: the raw FFI layer. It `include!`s the bindgen output (`$OUT_DIR/bindings.rs`), so every `FDwf*` function and C constant (`trigsrc*`, `acqmode*`, `dwferc*`, …) lives in `crate::dwf`. It also holds the C-bool helpers `to_c_bool`/`from_c_bool` and maps `DWFERC` to `DwfError`.
 - **`src/lib.rs`**: the crate's `Error`/`Result`, plus `check_call(BOOL) -> Result<()>`. Every SDK call goes through `check_call`. When a call fails, it fetches `FDwfGetLastError` and turns it into `Error::FailWithErrorCode`. It also has the free functions `get_version` and `enumerate_devices`.
 - **`src/device.rs`**: `Device` owns an `HDWF` handle. It closes the handle in `Drop` and panics if the close fails. `Device::default()` opens the first available device (`open(-1, 0)`). Instruments are borrowed views tied to the device's lifetime: `device.analog_in()` → `AnalogIn<'_>`, `analog_in.channel(ix)` → `AnalogInChannel<'_>`, `device.digital_in()` → `DigitalIn<'_>`.
-- **`src/device_info.rs`**: the `DeviceId`/`DeviceInfo` traits. They wrap the `FDwfEnum*` queries, which take a device *index*, not a handle. `Device` derives the index as `handle - 1`.
+- **`src/device_info.rs`**: the `DeviceId`/`DeviceInfo` traits. They wrap the `FDwfEnum*` queries, which take a device *index*, not a handle. Handles don't map to indexes, so `Device` stores the index it was opened with. `open(-1, ..)` resolves `-1` to the first enumerated device that isn't in use. `open_ex` has no index, so its info queries return `Error::UnknownDeviceIndex`.
 - **`src/analog/analog_in.rs`, `src/digital/digital_in.rs`**: one module per instrument, behind the `analog.rs`/`digital.rs` module files (no `mod.rs`). Each module defines its own Rust enums (`TriggerSource`, `TriggerSlope`, `*AcquisitionStatus`, …) and maps them to bindgen constants with `match`. These enums are separate per module, not shared.
 
 ### Patterns for adding SDK functions
