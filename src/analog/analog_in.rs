@@ -46,6 +46,18 @@ impl<'a> AnalogIn<'a> {
         Ok(())
     }
 
+    /// Stops a running acquisition without applying pending configuration.
+    pub fn stop(&self) -> Result<()> {
+        unsafe {
+            check_call(dwf::FDwfAnalogInConfigure(
+                self.device.get_handle(),
+                to_c_bool(false),
+                to_c_bool(false),
+            ))?;
+        }
+        Ok(())
+    }
+
     pub fn set_frequency(&self, freq: f64) -> Result<()> {
         unsafe {
             check_call(dwf::FDwfAnalogInFrequencySet(
@@ -54,6 +66,34 @@ impl<'a> AnalogIn<'a> {
             ))?;
         }
         Ok(())
+    }
+
+    /// Returns the configured sample rate in Hz, which may differ from the value set.
+    pub fn get_frequency(&self) -> Result<f64> {
+        unsafe {
+            let mut freq = mem::MaybeUninit::uninit();
+            check_call(dwf::FDwfAnalogInFrequencyGet(
+                self.device.get_handle(),
+                freq.as_mut_ptr(),
+            ))?;
+
+            Ok(freq.assume_init())
+        }
+    }
+
+    /// Returns the settable sample rate range as `(min, max)` in Hz.
+    pub fn get_frequency_info(&self) -> Result<(f64, f64)> {
+        unsafe {
+            let mut min_freq = mem::MaybeUninit::uninit();
+            let mut max_freq = mem::MaybeUninit::uninit();
+            check_call(dwf::FDwfAnalogInFrequencyInfo(
+                self.device.get_handle(),
+                min_freq.as_mut_ptr(),
+                max_freq.as_mut_ptr(),
+            ))?;
+
+            Ok((min_freq.assume_init(), max_freq.assume_init()))
+        }
     }
 
     pub fn set_acquisition_mode(&self, mode: AcquisitionMode) -> Result<()> {

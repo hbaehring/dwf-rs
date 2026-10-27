@@ -111,4 +111,34 @@ mod tests {
         assert_eq!(error, Error::FailToRun);
         assert_eq!(error.get_error_message(), Ok("".to_string()));
     }
+
+    #[test]
+    #[ignore = "requires a connected device"]
+    fn analog_in_frequency_and_stop() {
+        use crate::analog::analog_in::AnalogAcquisitionStatus;
+
+        let device = device::Device::default();
+        let analog_in = device.analog_in();
+
+        let (min, max) = analog_in.get_frequency_info().unwrap();
+        assert!(0.0 < min && min <= max, "min={min} max={max}");
+
+        analog_in.set_frequency(1_234_567.0).unwrap();
+        let freq = analog_in.get_frequency().unwrap();
+        assert!(min <= freq && freq <= max, "freq={freq}");
+
+        analog_in.start().unwrap();
+        analog_in.stop().unwrap();
+        let status = analog_in.get_status().unwrap();
+        assert!(
+            !matches!(
+                status,
+                AnalogAcquisitionStatus::Prefill
+                    | AnalogAcquisitionStatus::Armed
+                    | AnalogAcquisitionStatus::Waiting
+                    | AnalogAcquisitionStatus::Running
+            ),
+            "status={status:?}"
+        );
+    }
 }
