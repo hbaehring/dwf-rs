@@ -16,6 +16,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 If the SDK headers are missing, `build.rs` falls back to the bundled `includes/dwf.h` and prints a cargo warning. That keeps docs.rs and CI builds working. Linking and running still need the real library. `bindgen` always needs libclang.
 
+### Linux setup without the full WaveForms package
+
+The Digilent `.deb` files go in `deps/`, which is untracked. The full `digilent.waveforms` package pulls in Qt and the GUI, so install only the Adept runtime and copy what `libdwf` needs (`ARCH=$(dpkg --print-architecture)`, run in `deps/`):
+
+```sh
+# Adept runtime. udevadm is commented out because containers have no udev.
+sudo dpkg --unpack ./digilent.adept.runtime_2.30.1_${ARCH}.deb && \
+sudo sed -i 's/^udevadm/#&/' /var/lib/dpkg/info/digilent.adept.runtime.postinst && \
+sudo dpkg --configure digilent.adept.runtime && \
+sudo apt-get install -yf
+
+# libdwf plus its firmware, without installing the package
+dpkg-deb --fsys-tarfile ./digilent.waveforms_3.25.1_${ARCH}.deb | sudo tar -x -C / --no-same-owner \
+  ./usr/lib/libdwf.so.3.25.1 ./usr/lib/libdwf.so.3 ./usr/lib/libdwf.so \
+  --wildcards './usr/share/digilent/waveforms/firmware/*'
+sudo ldconfig
+```
+
+The Adept libraries need `libusb-1.0-0` (`sudo apt-get install libusb-1.0-0` if `apt-get install -yf` doesn't pull it in). Without `/usr/share/digilent/waveforms/firmware`, `libdwf` reports "firmware path not found" and `check_error_code` fails. The headers aren't copied: the packaged `dwf.h` matches `includes/dwf.h`, so the bundled fallback is used. When a call fails, `libdwf` writes `DebugErc.log` to the working directory. Delete it rather than committing it.
+
 The SDK manual is at `docs/WaveForms SDK Reference Manual.pdf`. It's the reference for function semantics, such as whether a count is in samples or bytes.
 
 ## Commands
