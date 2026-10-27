@@ -1,12 +1,14 @@
 //! Replaces the libdwf functions used here with local definitions, so the
 //! wrappers can be tested without a device attached.
-use dwf::analog::analog_in::AcquisitionMode;
+use dwf::analog::analog_in::{AcquisitionMode, AnalogCoupling};
 use dwf::device::Device;
+use dwf::Error;
 use std::ffi::c_int;
 use std::sync::atomic::{AtomicI32, Ordering};
 
 static ACQUISITION_MODE: AtomicI32 = AtomicI32::new(-1);
 static CONFIGURE_FLAGS: AtomicI32 = AtomicI32::new(-1);
+static COUPLING_SET: AtomicI32 = AtomicI32::new(-1);
 
 #[no_mangle]
 unsafe extern "C" fn FDwfDeviceConfigOpen(
@@ -54,6 +56,76 @@ unsafe extern "C" fn FDwfAnalogInFrequencyInfo(
     *phz_min = 1.0e-3;
     *phz_max = 100.0e6;
     1
+}
+
+#[no_mangle]
+unsafe extern "C" fn FDwfAnalogInChannelCouplingSet(
+    _hdwf: c_int,
+    idx_channel: c_int,
+    coupling: c_int,
+) -> c_int {
+    COUPLING_SET.store(idx_channel * 10 + coupling, Ordering::SeqCst);
+    1
+}
+
+/// Reports the channel index as the coupling, so each index picks a value.
+#[no_mangle]
+unsafe extern "C" fn FDwfAnalogInChannelCouplingGet(
+    _hdwf: c_int,
+    idx_channel: c_int,
+    pcoupling: *mut c_int,
+) -> c_int {
+    *pcoupling = idx_channel;
+    1
+}
+
+#[no_mangle]
+unsafe extern "C" fn FDwfAnalogInChannelCouplingInfo(
+    _hdwf: c_int,
+    pfscoupling: *mut c_int,
+) -> c_int {
+    // AC only (bit 1), plus an undefined bit that must be ignored.
+    *pfscoupling = 0b1010;
+    1
+}
+
+#[test]
+fn set_coupling_maps_coupling_and_channel() {
+    let device = Device::open(0, 0).unwrap();
+    let analog_in = device.analog_in();
+
+    analog_in
+        .channel(2)
+        .set_coupling(AnalogCoupling::AC)
+        .unwrap();
+    assert_eq!(COUPLING_SET.load(Ordering::SeqCst), 21);
+    analog_in
+        .channel(3)
+        .set_coupling(AnalogCoupling::DC)
+        .unwrap();
+    assert_eq!(COUPLING_SET.load(Ordering::SeqCst), 30);
+}
+
+#[test]
+fn get_coupling_maps_value() {
+    let device = Device::open(0, 0).unwrap();
+    let analog_in = device.analog_in();
+
+    assert_eq!(analog_in.channel(0).get_coupling(), Ok(AnalogCoupling::DC));
+    assert_eq!(analog_in.channel(1).get_coupling(), Ok(AnalogCoupling::AC));
+    assert_eq!(
+        analog_in.channel(7).get_coupling(),
+        Err(Error::UnknownValue(7))
+    );
+}
+
+#[test]
+fn get_channel_coupling_info_decodes_bits() {
+    let device = Device::open(0, 0).unwrap();
+    assert_eq!(
+        device.analog_in().get_channel_coupling_info().unwrap(),
+        vec![AnalogCoupling::AC]
+    );
 }
 
 #[test]

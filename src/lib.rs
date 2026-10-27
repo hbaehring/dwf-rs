@@ -24,6 +24,8 @@ pub enum Error {
     UnknownDeviceIndex,
     /// A string argument contains a NUL byte and can't be passed to C.
     InvalidString,
+    /// The SDK returned an enum value this crate has no mapping for.
+    UnknownValue(i32),
 }
 
 impl Error {
@@ -140,5 +142,20 @@ mod tests {
             ),
             "status={status:?}"
         );
+    }
+
+    #[test]
+    #[ignore = "requires a connected device"]
+    fn analog_in_coupling_round_trip() {
+        let device = device::Device::default();
+        let analog_in = device.analog_in();
+        let channel = analog_in.channel(0);
+
+        let supported = analog_in.get_channel_coupling_info().unwrap();
+        assert!(!supported.is_empty());
+        for coupling in supported {
+            channel.set_coupling(coupling).unwrap();
+            assert_eq!(channel.get_coupling().unwrap(), coupling);
+        }
     }
 }

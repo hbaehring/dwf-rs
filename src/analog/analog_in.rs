@@ -1,7 +1,7 @@
 use crate::device::Device;
 use crate::dwf;
 use crate::dwf::to_c_bool;
-use crate::{check_call, Result};
+use crate::{check_call, Error, Result};
 use std::ffi::c_int;
 use std::mem;
 
@@ -309,6 +309,22 @@ impl<'a> AnalogIn<'a> {
         }
     }
 
+    /// Returns the coupling modes the channels support.
+    pub fn get_channel_coupling_info(&self) -> Result<Vec<AnalogCoupling>> {
+        let supported = unsafe {
+            let mut supported = mem::MaybeUninit::uninit();
+            check_call(dwf::FDwfAnalogInChannelCouplingInfo(
+                self.device.get_handle(),
+                supported.as_mut_ptr(),
+            ))?;
+            supported.assume_init()
+        };
+        Ok([AnalogCoupling::DC, AnalogCoupling::AC]
+            .into_iter()
+            .filter(|coupling| supported & (1 << coupling.to_dwf()) != 0)
+            .collect())
+    }
+
     // TODO: Rework to check channel index
     pub fn channel(&self, ix: i32) -> AnalogInChannel<'_> {
         AnalogInChannel {
@@ -411,6 +427,36 @@ impl<'a> AnalogInChannel<'a> {
         Ok(())
     }
 
+    /// Sets the input coupling. Channel index -1 sets it for all enabled channels.
+    pub fn set_coupling(&self, coupling: AnalogCoupling) -> Result<()> {
+        unsafe {
+            check_call(dwf::FDwfAnalogInChannelCouplingSet(
+                self.input.device.get_handle(),
+                self.ix,
+                coupling.to_dwf(),
+            ))?;
+        }
+        Ok(())
+    }
+
+    /// Returns the configured input coupling.
+    pub fn get_coupling(&self) -> Result<AnalogCoupling> {
+        unsafe {
+            let mut coupling = mem::MaybeUninit::uninit();
+            check_call(dwf::FDwfAnalogInChannelCouplingGet(
+                self.input.device.get_handle(),
+                self.ix,
+                coupling.as_mut_ptr(),
+            ))?;
+            let coupling = coupling.assume_init();
+            match coupling {
+                dwf::DwfAnalogCouplingDC => Ok(AnalogCoupling::DC),
+                dwf::DwfAnalogCouplingAC => Ok(AnalogCoupling::AC),
+                _ => Err(Error::UnknownValue(coupling)),
+            }
+        }
+    }
+
     pub fn enable(&self) -> Result<()> {
         unsafe {
             check_call(dwf::FDwfAnalogInChannelEnableSet(
@@ -456,4 +502,19 @@ pub enum AnalogFilter {
     Decimate,
     Average,
     MinMax,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub enum AnalogCoupling {
+    DC,
+    AC,
+}
+
+impl AnalogCoupling {
+    fn to_dwf(self) -> dwf::DwfAnalogCoupling {
+        match self {
+            AnalogCoupling::DC => dwf::DwfAnalogCouplingDC,
+            AnalogCoupling::AC => dwf::DwfAnalogCouplingAC,
+        }
+    }
 }
